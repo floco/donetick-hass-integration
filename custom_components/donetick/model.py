@@ -1,8 +1,8 @@
 """Donetick models."""
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 from homeassistant.components.todo import (
     TodoItem,
     TodoItemStatus,
@@ -120,7 +120,7 @@ class DonetickTask:
             status=data["status"],
             priority=data["priority"],
             labels=data["labels"],
-            labels_v2=labels_v2,
+            labels_v2=data.get("labelsV2") or [],
             is_active=data["isActive"],
             frequency_type=data["frequencyType"],
             frequency=data["frequency"],

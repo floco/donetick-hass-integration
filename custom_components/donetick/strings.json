@@ -30,6 +30,10 @@
                     "create_assignee_lists": {
                         "name": "Create individual task lists per person",
                         "description": "Create separate todo lists for each person assigned to tasks"
+                    },
+                    "create_label_lists": {
+                        "name": "Create label-based task lists",
+                        "description": "Create a todo list for each label to focus on themed chores"
                     }
                 }
             }
@@ -52,6 +56,10 @@
                     "create_assignee_lists": {
                         "name": "Create individual task lists per person",
                         "description": "Create separate todo lists for each person assigned to tasks"
+                    },
+                    "create_label_lists": {
+                        "name": "Create label-based task lists",
+                        "description": "Create a todo list for each label to focus on themed chores"
                     }
                 }
             }
