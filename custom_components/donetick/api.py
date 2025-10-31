@@ -38,7 +38,9 @@ class DonetickApiClient:
                 if not isinstance(data, list) :
                     _LOGGER.error("Unexpected response format from Donetick API")
                     return []
-                
+
+                _LOGGER.debug("Fetched %d chores from Donetick", len(data))
+
                 tasks: List[DonetickTask] = []
                 for task in data:
                     if not isinstance(task, dict):
@@ -50,10 +52,16 @@ class DonetickApiClient:
                     if "labelsV2" not in task or task["labelsV2"] is None:
                         task = {**task, "labelsV2": []}
 
+                    _LOGGER.debug(
+                        "Chore %s raw labelsV2 payload: %s",
+                        task.get("id"),
+                        task.get("labelsV2"),
+                    )
+
                     tasks.append(DonetickTask.from_json(task))
 
                 return tasks
-                
+
         except aiohttp.ClientError as err:
             _LOGGER.error("Error fetching tasks from Donetick: %s", err)
             raise
