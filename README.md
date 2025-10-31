@@ -53,4 +53,5 @@ Configure via **Settings** → **Devices & Services** → **Add Integration** �
 **Optional:**
 - **Show Due In**: Days ahead to display upcoming tasks (default: 7)
 - **Create Unified List**: Enable "All Tasks" todo list (default: true)  
-- **Create Assignee Lists**: Individual todo lists per user (default: false) 
+- **Create Assignee Lists**: Individual todo lists per user (default: false)
+- **Create Label Lists**: Individual todo lists per label (default: false) 
