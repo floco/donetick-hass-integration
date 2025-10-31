@@ -1,4 +1,5 @@
 """Todo for Donetick integration."""
+from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -18,11 +19,34 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_URL, CONF_TOKEN, CONF_SHOW_DUE_IN, CONF_CREATE_UNIFIED_LIST, CONF_CREATE_ASSIGNEE_LISTS, CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
+from .const import (
+    DOMAIN,
+    CONF_URL,
+    CONF_TOKEN,
+    CONF_SHOW_DUE_IN,
+    CONF_CREATE_UNIFIED_LIST,
+    CONF_CREATE_ASSIGNEE_LISTS,
+    CONF_CREATE_LABEL_LISTS,
+    CONF_REFRESH_INTERVAL,
+    DEFAULT_REFRESH_INTERVAL,
+)
 from .api import DonetickApiClient
 from .model import DonetickTask, DonetickMember
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _extract_label_id(label: dict[str, Any]) -> str | None:
+    """Return a string identifier for a label object."""
+
+    if not isinstance(label, dict):
+        return None
+
+    for key in ("id", "labelId", "label_id"):
+        if (value := label.get(key)) is not None:
+            return str(value)
+
+    return None
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -48,15 +72,24 @@ async def async_setup_entry(
 
     await coordinator.async_config_entry_first_refresh()
 
-    entities = []
-    
+    entities: list[DonetickTodoListBase] = []
+
     # Create unified list if enabled (check options first, then data)
     create_unified = config_entry.options.get(CONF_CREATE_UNIFIED_LIST, config_entry.data.get(CONF_CREATE_UNIFIED_LIST, True))
     if create_unified:
         entity = DonetickAllTasksList(coordinator, config_entry)
         entity._circle_members = []  # Will be set after we get members
         entities.append(entity)
-    
+
+    label_definitions: dict[str, dict[str, Any]] = {}
+    if coordinator.data:
+        for task in coordinator.data:
+            for label in getattr(task, "labels_v2", []) or []:
+                label_id = _extract_label_id(label)
+                if label_id is None or label_id in label_definitions:
+                    continue
+                label_definitions[label_id] = label
+
     # Get circle members for all entities (useful for custom cards)
     circle_members = []
     try:
@@ -82,7 +115,19 @@ async def async_setup_entry(
                 entities.append(entity)
     else:
         _LOGGER.debug("Assignee lists not enabled in config")
-    
+
+    create_label_lists = config_entry.options.get(
+        CONF_CREATE_LABEL_LISTS, config_entry.data.get(CONF_CREATE_LABEL_LISTS, False)
+    )
+    if create_label_lists and label_definitions:
+        _LOGGER.debug("Label lists enabled in config; creating %d label entities", len(label_definitions))
+        for label in label_definitions.values():
+            entity = DonetickLabelTasksList(coordinator, config_entry, label)
+            entity._circle_members = circle_members
+            entities.append(entity)
+    elif create_label_lists:
+        _LOGGER.debug("Label lists enabled but no labels were discovered from coordinator data")
+
     _LOGGER.debug("Creating %d total entities", len(entities))
     async_add_entities(entities)
 
@@ -310,6 +355,55 @@ class DonetickAssigneeTasksList(DonetickTodoListBase):
     def _filter_tasks(self, tasks):
         """Return tasks assigned to this member."""
         return [task for task in tasks if task.is_active and task.assigned_to == self._member.user_id]
+
+
+class DonetickLabelTasksList(DonetickTodoListBase):
+    """Donetick label-specific Tasks List entity."""
+
+    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, label: dict[str, Any]) -> None:
+        """Initialize the label-specific Tasks List."""
+
+        super().__init__(coordinator, config_entry)
+        self._label = label
+        self._label_id = _extract_label_id(label)
+        label_name = label.get("name") if isinstance(label, dict) else None
+        if not label_name:
+            label_name = f"Label {self._label_id}" if self._label_id else "Label"
+
+        suffix = self._label_id or label_name.replace(" ", "_")
+        self._attr_unique_id = f"dt_{config_entry.entry_id}_label_{suffix}_tasks"
+        self._attr_name = f"{label_name} Tasks"
+
+    def _filter_tasks(self, tasks):
+        """Return tasks associated with this label."""
+
+        def _task_has_label(task: DonetickTask) -> bool:
+            for task_label in getattr(task, "labels_v2", []) or []:
+                if _extract_label_id(task_label) == self._label_id:
+                    return True
+            return False
+
+        return [task for task in tasks if task.is_active and _task_has_label(task)]
+
+    @property
+    def extra_state_attributes(self):
+        """Return additional attributes, including label metadata."""
+
+        attrs = dict(super().extra_state_attributes or {})
+        label_details = {}
+
+        if isinstance(self._label, dict):
+            for key in ("id", "labelId", "label_id", "name", "color", "description"):
+                if (value := self._label.get(key)) is not None:
+                    label_details[key] = value
+
+        if self._label_id and "label_id" not in label_details:
+            label_details["label_id"] = self._label_id
+
+        if label_details:
+            attrs["label"] = label_details
+
+        return attrs
 
 # Keep the old class for backward compatibility
 class DonetickTodoListEntity(DonetickAllTasksList):
