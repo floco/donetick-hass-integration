@@ -72,6 +72,13 @@ async def async_setup_entry(
 
     await coordinator.async_config_entry_first_refresh()
 
+    if coordinator.data is None:
+        _LOGGER.debug("Coordinator returned no tasks on first refresh")
+    else:
+        _LOGGER.debug(
+            "Coordinator returned %d tasks on first refresh", len(coordinator.data)
+        )
+
     entities: list[DonetickTodoListBase] = []
 
     # Create unified list if enabled (check options first, then data)
@@ -84,7 +91,15 @@ async def async_setup_entry(
     label_definitions: dict[str, dict[str, Any]] = {}
     if coordinator.data:
         for task in coordinator.data:
-            for label in getattr(task, "labels_v2", []) or []:
+            labels = getattr(task, "labels_v2", []) or []
+            _LOGGER.debug(
+                "Task %s (%s) exposes %d labels_v2 entries: %s",
+                getattr(task, "id", "unknown"),
+                getattr(task, "name", "<unnamed>"),
+                len(labels),
+                labels,
+            )
+            for label in labels:
                 label_id = _extract_label_id(label)
                 if label_id is None or label_id in label_definitions:
                     continue
@@ -126,7 +141,18 @@ async def async_setup_entry(
             entity._circle_members = circle_members
             entities.append(entity)
     elif create_label_lists:
-        _LOGGER.debug("Label lists enabled but no labels were discovered from coordinator data")
+        _LOGGER.debug(
+            "Label lists enabled but no labels were discovered from coordinator data"
+        )
+        if not coordinator.data:
+            _LOGGER.debug("Coordinator data is empty; nothing to inspect for labels")
+        else:
+            for task in coordinator.data:
+                _LOGGER.debug(
+                    "Task %s labels_v2 payload at failure: %s",
+                    getattr(task, "id", "unknown"),
+                    getattr(task, "labels_v2", []),
+                )
 
     _LOGGER.debug("Creating %d total entities", len(entities))
     async_add_entities(entities)
