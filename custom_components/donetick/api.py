@@ -39,7 +39,20 @@ class DonetickApiClient:
                     _LOGGER.error("Unexpected response format from Donetick API")
                     return []
                 
-                return [DonetickTask.from_json(task) for task in data]
+                tasks: List[DonetickTask] = []
+                for task in data:
+                    if not isinstance(task, dict):
+                        _LOGGER.debug("Skipping unexpected chore payload: %s", task)
+                        continue
+
+                    # The backend may omit the labelsV2 field entirely for chores without labels.
+                    # Ensure we hand a consistent payload to the model parser.
+                    if "labelsV2" not in task or task["labelsV2"] is None:
+                        task = {**task, "labelsV2": []}
+
+                    tasks.append(DonetickTask.from_json(task))
+
+                return tasks
                 
         except aiohttp.ClientError as err:
             _LOGGER.error("Error fetching tasks from Donetick: %s", err)
