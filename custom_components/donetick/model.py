@@ -92,11 +92,11 @@ class DonetickTask:
     status: int
     priority: int
     labels: Optional[str]
-    labels_v2: List[dict[str, Any]] = field(default_factory=list)
     is_active: bool
     frequency_type: str
     frequency: int
     frequency_metadata: str
+    labels_v2: Optional[List[DonetickLabel]] = None
     assigned_to: Optional[int] = None
     description: Optional[str] = None
 
